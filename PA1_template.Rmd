@@ -1,25 +1,180 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Assignment 1"
+date: "June 12, 2016"
+output: html_document
 ---
 
+## Setting up global options
 
-## Loading and preprocessing the data
+```{r SHOW CODE, include=FALSE}
+        show_Code <- TRUE
+```
 
+```{r GLOBAL SETUP, include=show_Code}
 
+        setwd("C:/Users/Konstantinos/Dropbox/R/Reproducible Research/Assignment 1/RepData_PeerAssessment1")
+        knitr::opts_chunk$set(echo = TRUE)
 
-## What is mean total number of steps taken per day?
+        library(ggplot2)
 
+        options(digits = 2)
 
+```
 
-## What is the average daily activity pattern?
+## Loading and pre-processing the dataset
 
+Loading the dataset:
 
+```{r MAIN DATASET LOADING, include=show_Code}
 
-## Imputing missing values
+        myDF <- read.csv("activity.csv", 
+                        sep = ",", 
+                        header = TRUE, 
+                        na.strings = "NA",
+                        colClasses = c("integer", "Date", "integer"))
 
+        myDF_rows <- nrow(myDF)
 
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+Renaming the data columns into something more "human", and identifying missing values:
+
+```{r MAIN DATASET COLUMNS PROCESSING AND IDENTIFICATION OF MISSING VALUES, include=show_Code}
+
+        colnames(myDF)[colnames(myDF)=="steps"] <- "Steps_Taken"
+        colnames(myDF)[colnames(myDF)=="date"] <- "Date_Reference"
+        colnames(myDF)[colnames(myDF)=="interval"] <-"Time_Interval"
+
+        myDF$DaysSinceStart <- difftime(myDF$Date_Reference, min(myDF$Date_Reference), units = "days")
+        
+        mValues <- sum(is.na(myDF$Steps_Taken))
+
+```
+
+The main dataset has `r myDF_rows` rows, which should be the number expected.
+
+## Total number of steps per day
+
+```{r STEPS PER DAY CALCULATIONS_RAW, include=show_Code}
+
+        temp <- aggregate(myDF$Steps_Taken, by = list(myDF$DaysSinceStart), sum)
+        colnames(temp)[colnames(temp)=="Group.1"] <- "DaysSinceStart"
+        colnames(temp)[colnames(temp)=="x"] <- "Steps_Taken"
+        
+        temp$Date_Reference <- min(myDF$Date_Reference) + temp$DaysSinceStart
+        
+```
+
+The following histogram presents the distribution of steps taken at any given day:
+
+```{r HISTOGRAM OF STEPS PER DAY, include=show_Code}
+        
+        hist(temp$Steps_Taken, 
+                main = "Histogram - Steps Taken", xlab = "Steps Taken", ylab = "Number of Days", col = "grey")
+
+```
+
+And, respectively, the average and median steps per day are:
+
+```{r MEAN AND MEDIAN OF STEPS PER DAY, include=show_Code}
+
+        AverageStepsTaken <- mean(temp$Steps_Taken, na.rm = TRUE)
+        MedianStepsTaken <- median(temp$Steps_Taken, na.rm = TRUE)
+
+```
+
+## Average daily activity pattern
+
+We then show the activity pattern on any given day:
+
+```{r MEAN STEPS PER 5-MIN INTERVAL, include=show_Code}
+
+        temp_Avg5 <- aggregate(myDF$Steps_Taken, by = list(myDF$Time_Interval), FUN = mean, na.rm = TRUE)
+        colnames(temp_Avg5)[colnames(temp_Avg5)=="Group.1"] <- "Interval"
+        colnames(temp_Avg5)[colnames(temp_Avg5)=="x"] <- "AverageStepsTaken"
+        
+        ggplot(temp_Avg5, aes(x = temp_Avg5$Interval, y = temp_Avg5$AverageStepsTaken)) +
+                geom_line(colour = "blue", size = 0.5) +
+                xlab("Date") + 
+                ylab("Average Steps Taken")
+        
+        max5m <- temp_Avg5[which.max(temp_Avg5$AverageStepsTaken),]
+        
+```
+
+It is evident that there are "zones" of activity during the day, but this is beyond the scope of this report.
+
+## Correcting missing values
+
+Out of a total of `r myDF_rows` observations, `r mValues` are missing.
+
+We have chosen to replace those missing values with the Median daily steps allocated to the 5-minute interval (i.e., divided by 288 5-minute intervals in the day).
+
+```{r CORRECTING MISSING VALUES, include=show_Code}
+
+        myDF_Prime <- myDF
+        myDF_Prime$Steps_Taken[is.na(myDF_Prime$Steps_Taken)] <- (MedianStepsTaken / 288)
+        
+        mValues_Prime <- sum(is.na(myDF_Prime$Steps_Taken))
+        
+        temp_Prime <- aggregate(myDF_Prime$Steps_Taken, by = list(myDF_Prime$DaysSinceStart), sum)
+        colnames(temp_Prime)[colnames(temp_Prime)=="Group.1"] <- "DaysSinceStart"
+        colnames(temp_Prime)[colnames(temp_Prime)=="x"] <- "Steps_Taken"
+        
+        temp_Prime$Date_Reference <- min(myDF_Prime$Date_Reference) + temp_Prime$DaysSinceStart
+
+```
+
+We plot once again the distribution of steps per day, after correcting for missing values:
+
+```{r HISTOGRAM OF STEPS PER DAY AFTER CORRECTING MISSING VALUES, include=show_Code}
+        
+        hist(temp_Prime$Steps_Taken, 
+                main = "Histogram - Steps Taken", xlab = "Steps Taken", ylab = "Number of Days", col = "grey")
+
+```
+
+```{r MEAN AND MEDIAN OF STEPS PER DAY AFTER CORRECTING MISSING VALUES, include=show_Code}
+
+        AverageStepsTaken_Prime <- mean(temp_Prime$Steps_Taken, na.rm = TRUE)
+        MedianStepsTaken_Prime <- median(temp_Prime$Steps_Taken, na.rm = TRUE)
+
+```
+
+## Differences in activity patterns between weekdays and weekends
+
+To understand differences in activity patterns, we plot the average steps taken (per 5-minute time interval) during weekends and weekdays.
+
+To do so, we first identify weekends and weekdays in the dataset:
+
+```{r IDENTIFYING WEEKENDS AND WEEKDAYS, include=show_Code}
+
+        myDF_Prime$Date_Reference <- as.Date(myDF_Prime$Date_Reference)
+        
+        weekdays1 <- c('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday')
+        
+        myDF_Prime$wDay <- factor(weekdays(myDF_Prime$Date_Reference) %in% weekdays1,
+                                  levels = c(FALSE, TRUE),
+                                  labels = c("weekend", "weekday"))
+
+```
+
+... and then proceed with the relevant plots:
+
+```{r CALCULATING AND PLOTTING MEAN DIFFERENCES IN ACTIVITY DURING WEEKDAYS AND WEEKENDS, include=show_Code}
+
+        temp_Prime_Avg5 <- aggregate(myDF_Prime$Steps_Taken,
+                                     by = list(myDF_Prime$wDay, myDF_Prime$Time_Interval), 
+                                     FUN = mean, na.rm = TRUE)
+        
+        colnames(temp_Prime_Avg5)[colnames(temp_Prime_Avg5)=="Group.1"] <- "DayType"
+        colnames(temp_Prime_Avg5)[colnames(temp_Prime_Avg5)=="Group.2"] <- "Time_Interval"
+        colnames(temp_Prime_Avg5)[colnames(temp_Prime_Avg5)=="x"] <- "Steps_Taken"
+
+        ggplot(temp_Prime_Avg5, aes(x = Time_Interval, y = Steps_Taken, group = DayType)) + 
+                geom_line(colour = "blue", size = 0.5) +
+                facet_grid(DayType ~ .) +
+                xlab("Time Interval") + 
+                ylab("Average Steps Taken")
+
+```
